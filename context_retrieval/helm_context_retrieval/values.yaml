@@ -1,0 +1,30 @@
+namespace: context-retrieval
+
+deployment:
+  name: retrieval
+  replicaCount: 1
+  labels:
+    appName: retrieval
+  container:
+    name: retrieval
+    portNumber: 8005
+    args: []
+  image:
+    name: khoatomato/context_retrieval
+    version: v0.0
+    imagePullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 200m
+      memory: 1.5Gi
+    limits:
+      cpu: 2
+      memory: 10Gi
+
+service:
+  name: retrieval
+  type: ClusterIP 
+  httpPort:
+    enable: true
+    port: 82
+    targetPort: 8005
