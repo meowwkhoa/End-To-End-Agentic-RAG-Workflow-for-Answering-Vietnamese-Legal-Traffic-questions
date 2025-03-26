@@ -1,7 +1,7 @@
 namespace: primary-agent
 
 ingress: 
-  host: 34.87.150.243.sslip.io
+  host: 34.87.150.243.nip.io
 
 deployment:
   name: primary-agent
@@ -29,5 +29,5 @@ service:
   type: ClusterIP 
   httpPort:
     enable: true
-    port: 84
+    port: 65004
     targetPort: 8007

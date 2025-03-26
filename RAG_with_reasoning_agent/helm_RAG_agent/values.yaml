@@ -26,5 +26,5 @@ service:
   type: ClusterIP 
   httpPort:
     enable: true
-    port: 83
+    port: 65003
     targetPort: 8006

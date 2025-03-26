@@ -1,0 +1,4 @@
+ansible/secrets
+.vscode/settings.json
+**/.ipynb_checkpoints/
+**/.env

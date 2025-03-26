@@ -5,6 +5,7 @@ import requests
 import uvicorn
 import logging
 from openai import OpenAI
+from dotenv import load_dotenv
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
@@ -13,6 +14,8 @@ from opentelemetry.exporter.jaeger.thrift import JaegerExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
 import os
+
+load_dotenv()
 
 # Logging Setup
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -35,10 +38,10 @@ FastAPIInstrumentor.instrument_app(app)
 RequestsInstrumentor().instrument()
 
 # Configuration
-RUNPOD_ENDPOINT_ID = ""
-RUNPOD_API_KEY = ""
+RUNPOD_ENDPOINT_ID = os.getenv("RUNPOD_ENDPOINT_ID")
+RUNPOD_API_KEY = os.getenv("RUNPOD_API_KEY")
 RUNPOD_BASE_URL = f"https://api.runpod.ai/v2/{RUNPOD_ENDPOINT_ID}/openai/v1"
-RAG_SERVICE_URL = "http://rag-agent.rag-agent.svc.cluster.local:83/process-query"
+RAG_SERVICE_URL = "http://rag-agent.rag-agent.svc.cluster.local:65003/process-query"
 
 client = OpenAI(base_url=RUNPOD_BASE_URL, api_key=RUNPOD_API_KEY)
 

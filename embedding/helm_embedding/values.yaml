@@ -26,5 +26,5 @@ service:
   type: ClusterIP 
   httpPort:
     enable: true
-    port: 81
+    port: 65001
     targetPort: 5000

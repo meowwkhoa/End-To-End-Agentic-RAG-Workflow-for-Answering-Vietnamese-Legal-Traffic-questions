@@ -8,6 +8,7 @@ import asyncio
 from openai import OpenAI
 import os
 import logging
+from dotenv import load_dotenv
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
@@ -15,6 +16,8 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.jaeger.thrift import JaegerExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
+
+load_dotenv()
 
 # Logging Setup
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -35,11 +38,10 @@ FastAPIInstrumentor.instrument_app(app)
 RequestsInstrumentor().instrument()
 
 # Configuration
-RUNPOD_ENDPOINT_ID = ""
-RUNPOD_API_KEY = ""
+RUNPOD_ENDPOINT_ID = os.getenv("RUNPOD_ENDPOINT_ID")
+RUNPOD_API_KEY = os.getenv("RUNPOD_API_KEY")
 RUNPOD_BASE_URL = f"https://api.runpod.ai/v2/{RUNPOD_ENDPOINT_ID}/openai/v1"
-CONTEXT_SERVICE_URL = os.getenv("CONTEXT_SERVICE_URL", "http://retrieval.context-retrieval.svc.cluster.local:82/retrieve-context")
-OLLAMA_API_URL = "http://localhost:11434/api/generate"
+CONTEXT_SERVICE_URL = os.getenv("CONTEXT_SERVICE_URL", "http://retrieval.context-retrieval.svc.cluster.local:65002/retrieve-context")
 
 client = OpenAI(base_url=RUNPOD_BASE_URL, api_key=RUNPOD_API_KEY)
 
@@ -78,25 +80,6 @@ def call_runpod(prompt: str) -> str:
             span.record_exception(e)
             logger.error(f"Error in RunPod API call (RAG Agent): {e}")
             raise HTTPException(status_code=500, detail="RunPod API error in RAG Agent")
-
-def call_ollama(prompt: str) -> str:
-    """Helper function to call Ollama API"""
-    payload = {
-        "model": "deepseek-r1:7b",
-        "prompt": prompt,
-        "stream": False,
-        "options": {
-            "temperature": 0.6,
-            "top_p": 0.8,
-            "max_tokens": 500,
-        },
-    }
-    try:
-        response = requests.post(OLLAMA_API_URL, json=payload)
-        response.raise_for_status()
-        return response.json().get("response", "")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ollama API error: {str(e)}")
 
 def extract_response(response: str) -> tuple:
     """Extract components from model response without fallback default strings."""

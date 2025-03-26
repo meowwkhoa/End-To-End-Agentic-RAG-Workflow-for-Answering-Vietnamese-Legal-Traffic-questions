@@ -34,7 +34,7 @@ FastAPIInstrumentor.instrument_app(app)
 RequestsInstrumentor().instrument()
 
 WEAVIATE_URL = os.getenv("WEAVIATE_URL", "http://weaviate.weaviate.svc.cluster.local:85")
-VECTORIZE_URL = os.getenv("VECTORIZE_URL", "http://emb-svc.emb.svc.cluster.local:81/vectorize")
+VECTORIZE_URL = os.getenv("VECTORIZE_URL", "http://emb-svc.emb.svc.cluster.local:65001/vectorize")
 
 class QueryRequest(BaseModel):
     query: str
