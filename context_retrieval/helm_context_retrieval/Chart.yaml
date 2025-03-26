@@ -1,0 +1,7 @@
+apiVersion: v2
+name: context-retrieval
+description: A Helm chart for deploying the FastAPI context retrieval
+type: application
+version: 0.1.0
+appVersion: "1.0"
+

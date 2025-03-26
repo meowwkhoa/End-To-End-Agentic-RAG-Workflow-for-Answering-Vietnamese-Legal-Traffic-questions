@@ -1,0 +1,33 @@
+namespace: primary-agent
+
+ingress: 
+  host: 34.87.150.243.nip.io
+
+deployment:
+  name: primary-agent
+  replicaCount: 1
+  labels:
+    appName: primary-agent
+  container:
+    name: primary-agent
+    portNumber: 8007
+    args: []
+  image:
+    name: khoatomato/primary_agent
+    version: v0.0
+    imagePullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 200m
+      memory: 1.5Gi
+    limits:
+      cpu: 2
+      memory: 10Gi
+
+service:
+  name: primary-agent
+  type: ClusterIP 
+  httpPort:
+    enable: true
+    port: 65004
+    targetPort: 8007
