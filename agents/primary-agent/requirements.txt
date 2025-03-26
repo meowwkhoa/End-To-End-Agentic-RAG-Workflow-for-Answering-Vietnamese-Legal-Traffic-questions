@@ -1,0 +1,13 @@
+fastapi==0.110.1
+requests==2.32.3
+uvicorn==0.29.0
+openai
+pydantic
+
+opentelemetry-api==1.19.0
+opentelemetry-sdk==1.19.0
+opentelemetry-instrumentation-fastapi==0.40b0
+opentelemetry-instrumentation-requests==0.40b0
+opentelemetry-instrumentation-asgi==0.40b0
+opentelemetry-exporter-jaeger==1.19.0
+loguru==0.7.0
