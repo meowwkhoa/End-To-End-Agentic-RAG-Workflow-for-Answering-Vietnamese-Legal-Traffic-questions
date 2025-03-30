@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional
-import requests
+import httpx
 import uvicorn
 import re
 import asyncio
@@ -9,15 +9,17 @@ from openai import OpenAI
 import os
 import logging
 from dotenv import load_dotenv
+
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.jaeger.thrift import JaegerExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.instrumentation.requests import RequestsInstrumentor
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 
 load_dotenv()
+
 
 # Logging Setup
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -34,12 +36,11 @@ trace_provider.add_span_processor(span_processor)
 trace.set_tracer_provider(trace_provider)
 
 app = FastAPI()
-FastAPIInstrumentor.instrument_app(app)
-RequestsInstrumentor().instrument()
+HTTPXClientInstrumentor().instrument()
 
 # Configuration
-RUNPOD_ENDPOINT_ID = os.getenv("RUNPOD_ENDPOINT_ID")
-RUNPOD_API_KEY = os.getenv("RUNPOD_API_KEY")
+RUNPOD_ENDPOINT_ID = os.getenv('RUNPOD_ENDPOINT_ID')
+RUNPOD_API_KEY = os.getenv('RUNPOD_API_KEY')
 RUNPOD_BASE_URL = f"https://api.runpod.ai/v2/{RUNPOD_ENDPOINT_ID}/openai/v1"
 CONTEXT_SERVICE_URL = os.getenv("CONTEXT_SERVICE_URL", "http://retrieval.context-retrieval.svc.cluster.local:65002/retrieve-context")
 
@@ -56,20 +57,23 @@ class RAGResponse(BaseModel):
     answer: Optional[str]
     refined_query: Optional[str]
     attempts: int
-    response: str  # For backward compatibility
+    response: str
 
-def call_runpod(prompt: str) -> str:
-    """Calls RunPod API to generate a response."""
+async def call_runpod(prompt: str) -> str:
+    """Calls RunPod API to generate a response asynchronously."""
     with tracer.start_as_current_span("call_runpod") as span:
         try:
             logger.info("Calling RunPod API (RAG Agent)")
-            response = client.chat.completions.create(
-                model="deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",  # Adjust model as needed
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.6,
-                top_p=0.8,
-                max_tokens=700,
+            response = await asyncio.to_thread(
+                lambda: client.chat.completions.create(
+                    model="deepseek-ai/DeepSeek-R1-Distill-Qwen-7B", 
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.6,
+                    top_p=0.8,
+                    max_tokens=700,
+                )
             )
+
             result = response.choices[0].message.content
             span.set_attribute("runpod.response_length", len(result))
             span.set_status(trace.StatusCode.OK)
@@ -80,6 +84,16 @@ def call_runpod(prompt: str) -> str:
             span.record_exception(e)
             logger.error(f"Error in RunPod API call (RAG Agent): {e}")
             raise HTTPException(status_code=500, detail="RunPod API error in RAG Agent")
+
+
+async def fetch_context(query, request):
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            CONTEXT_SERVICE_URL,
+            json={"query": query, "limit": request.limit, "alpha": request.alpha}
+        )
+        response.raise_for_status()
+        return response.json().get("context", "")
 
 def extract_response(response: str) -> tuple:
     """Extract components from model response without fallback default strings."""
@@ -107,13 +121,7 @@ async def process_query(request: QueryRequest):
             with tracer.start_as_current_span(f"attempt_{attempt+1}") as attempt_span:
                 try:
                     # Get context from the context service
-                    context_response = await asyncio.to_thread(
-                        requests.post,
-                        CONTEXT_SERVICE_URL,
-                        json={"query": query, "limit": request.limit, "alpha": request.alpha}
-                    )
-                    context_response.raise_for_status()
-                    context = context_response.json().get("context", "")
+                    context = await fetch_context(query, request)
     
                     # Generate prompt using the provided context and query
                     prompt = f"""
@@ -141,7 +149,7 @@ async def process_query(request: QueryRequest):
                     """
     
                     # Get model response from RunPod
-                    model_response = call_runpod(prompt)
+                    model_response = await call_runpod(prompt)
                     reasoning, answer, refined_query = extract_response(model_response)
     
                     attempt_logs.append({
@@ -152,7 +160,7 @@ async def process_query(request: QueryRequest):
                         "refined_query": refined_query
                     })
     
-                    if answer is not None and answer.strip():
+                    if answer.strip():
                         break
     
                     if refined_query:
@@ -163,26 +171,19 @@ async def process_query(request: QueryRequest):
                     attempt_span.record_exception(e)
                     raise HTTPException(status_code=500, detail=str(e))
     
-        detailed_log = "\n\n".join(
-            [f"Attempt {log['attempt']} (Query: {log['query_used']}):\nReasoning: {log['reasoning']}\nAnswer: {log['answer']}\nRefined Query: {log['refined_query']}"
-             for log in attempt_logs]
-        )
-    
         final_attempt = attempt_logs[-1]
-    
-        if final_attempt['answer'] is not None and final_attempt['answer'].strip():
-            status = "success" if final_attempt['attempt'] == 1 else "refined_success"
-        else:
-            status = "max_retries_exceeded"
+        status = "success" if final_attempt['attempt'] == 1 else "refined_success" if final_attempt['answer'].strip() else "max_retries_exceeded"
     
         return RAGResponse(
             status=status,
             reasoning=final_attempt['reasoning'],
-            answer=final_attempt['answer'] if final_attempt['answer'] and final_attempt['answer'].strip() else None,
+            answer=final_attempt['answer'] if final_attempt['answer'].strip() else None,
             refined_query=final_attempt['refined_query'],
             attempts=len(attempt_logs),
-            response=detailed_log
+            response=str(attempt_logs)
         )
+    
+FastAPIInstrumentor.instrument_app(app)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8006)

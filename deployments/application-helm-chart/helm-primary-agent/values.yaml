@@ -1,7 +1,7 @@
 namespace: primary-agent
 
 ingress: 
-  host: 34.87.150.243.nip.io
+  host: 34.124.142.15.nip.io
 
 deployment:
   name: primary-agent

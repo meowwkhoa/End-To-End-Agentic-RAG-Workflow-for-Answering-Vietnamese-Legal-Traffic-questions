@@ -1,0 +1,10 @@
+services:
+  rag_agent:
+    build:
+      context: .
+      args:
+        RUNPOD_API_KEY: ${RUNPOD_API_KEY}
+        RUNPOD_ENDPOINT_ID: ${RUNPOD_ENDPOINT_ID}
+    image: khoatomato/rag_agent:v0.0
+    env_file:
+      - .env

@@ -3,7 +3,7 @@
 variable "project_id" {
   description = "The project ID to host the cluster in"
   type        = string
-  default     = "llmops1-454307"
+  default     = "llmops-455207"
 }
 
 variable "region" {
@@ -15,7 +15,7 @@ variable "region" {
 variable "zone" {
   description = "The zone within the region where the cluster will be deployed"
   type        = string
-  default     = "asia-southeast1-b"
+  default     = "asia-southeast1-c"
 }
 
 variable "self_link" {
