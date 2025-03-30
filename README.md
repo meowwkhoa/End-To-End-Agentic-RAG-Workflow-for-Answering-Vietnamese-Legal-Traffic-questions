@@ -99,7 +99,7 @@ monitoring/                                        /* Monitoring and observabili
 deployments/                                       /* Deployment Helm charts */
 ├── weaviate/                                      /* Weaviate vector database deployment */
 ├── nginx-ingress/                                 /* Nginx Ingress Controller deployment */
-└── your-application-helm-chart/                   /* Helm chart for deploying your application */
+└── application-helm-chart/                   /* Helm chart for deploying applications */
 
 ```
 
