@@ -26,7 +26,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Tracing Setup
-JAEGER_HOST = os.getenv("JAEGER_HOST", "localhost")
+JAEGER_HOST = os.getenv("JAEGER_HOST", "jaeger-tracing.jaeger-tracing.svc.cluster.local")
 JAEGER_PORT = int(os.getenv("JAEGER_PORT", 6831))
 trace_provider = TracerProvider(resource=Resource.create({SERVICE_NAME: "RAG-Agent"}))
 tracer = trace_provider.get_tracer("rag-agent-tracer")
@@ -37,6 +37,8 @@ trace.set_tracer_provider(trace_provider)
 
 app = FastAPI()
 HTTPXClientInstrumentor().instrument()
+FastAPIInstrumentor.instrument_app(app, tracer_provider=trace_provider)
+
 
 # Configuration
 RUNPOD_ENDPOINT_ID = os.getenv('RUNPOD_ENDPOINT_ID')
@@ -61,8 +63,7 @@ class RAGResponse(BaseModel):
 
 async def call_runpod(prompt: str) -> str:
     """Calls RunPod API to generate a response asynchronously."""
-    with tracer.start_as_current_span("call_runpod") as span:
-        try:
+    try:
             logger.info("Calling RunPod API (RAG Agent)")
             response = await asyncio.to_thread(
                 lambda: client.chat.completions.create(
@@ -75,13 +76,9 @@ async def call_runpod(prompt: str) -> str:
             )
 
             result = response.choices[0].message.content
-            span.set_attribute("runpod.response_length", len(result))
-            span.set_status(trace.StatusCode.OK)
             logger.info("RunPod API call successful (RAG Agent)")
             return result
-        except Exception as e:
-            span.set_status(trace.StatusCode.ERROR)
-            span.record_exception(e)
+    except Exception as e:
             logger.error(f"Error in RunPod API call (RAG Agent): {e}")
             raise HTTPException(status_code=500, detail="RunPod API error in RAG Agent")
 
@@ -111,14 +108,12 @@ def extract_response(response: str) -> tuple:
 
 @app.post("/process-query", response_model=RAGResponse)
 async def process_query(request: QueryRequest):
-    with tracer.start_as_current_span("process_query") as span:
         original_query = request.query
         query = original_query
         max_retries = 2  # Allow one refine attempt (total attempts = 2)
         attempt_logs = []
     
         for attempt in range(max_retries):
-            with tracer.start_as_current_span(f"attempt_{attempt+1}") as attempt_span:
                 try:
                     # Get context from the context service
                     context = await fetch_context(query, request)
@@ -168,7 +163,6 @@ async def process_query(request: QueryRequest):
                     else:
                         break
                 except Exception as e:
-                    attempt_span.record_exception(e)
                     raise HTTPException(status_code=500, detail=str(e))
     
         final_attempt = attempt_logs[-1]
@@ -182,8 +176,6 @@ async def process_query(request: QueryRequest):
             attempts=len(attempt_logs),
             response=str(attempt_logs)
         )
-    
-FastAPIInstrumentor.instrument_app(app)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8006)

@@ -24,7 +24,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Tracing Setup
-JAEGER_HOST = os.getenv("JAEGER_HOST", "localhost")
+JAEGER_HOST = os.getenv("JAEGER_HOST", "jaeger-tracing.jaeger-tracing.svc.cluster.local")
 JAEGER_PORT = int(os.getenv("JAEGER_PORT", 6831))
 
 trace_provider = TracerProvider(resource=Resource.create({SERVICE_NAME: "Primary-Agent"}))
@@ -37,6 +37,8 @@ trace.set_tracer_provider(trace_provider)
 app = FastAPI()
 # Automatic Instrumentation for FastAPI and httpx
 HTTPXClientInstrumentor().instrument()
+FastAPIInstrumentor.instrument_app(app, tracer_provider=trace_provider)
+
 
 # Configuration
 RUNPOD_ENDPOINT_ID = os.getenv("RUNPOD_ENDPOINT_ID")
@@ -61,8 +63,7 @@ class RAGResponse(BaseModel):
 
 async def call_runpod(prompt: str) -> str:
     """Calls RunPod API to generate a response."""
-    with tracer.start_as_current_span("call_runpod") as span:
-        try:
+    try:
             logger.info("Calling RunPod API (Primary Agent)")
             response = await asyncio.to_thread(
                 lambda: client.chat.completions.create(
@@ -75,13 +76,9 @@ async def call_runpod(prompt: str) -> str:
             )
 
             result = response.choices[0].message.content
-            span.set_attribute("runpod.response_length", len(result))
-            span.set_status(trace.StatusCode.OK)
             logger.info("RunPod API call successful")
             return result
-        except Exception as e:
-            span.set_status(trace.StatusCode.ERROR)
-            span.record_exception(e)
+    except Exception as e:
             logger.error(f"Error in RunPod API call (Primary Agent): {e}")
             raise HTTPException(status_code=500, detail="RunPod API error")
 
@@ -99,7 +96,6 @@ async def call_rag_service(request: QueryRequest):
 
 @app.post("/primary-agent", response_model=RAGResponse)
 async def primary_agent_endpoint(request: QueryRequest):
-    with tracer.start_as_current_span("primary_agent_endpoint") as span:
         logger.info(f"Received request: {request.query}")
         prompt = f"""
             You are an intelligent AI assistant specialized in answering user queries.
@@ -129,7 +125,6 @@ async def primary_agent_endpoint(request: QueryRequest):
                 "response": response
             }
         
-FastAPIInstrumentor.instrument_app(app)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8007)

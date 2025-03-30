@@ -62,39 +62,44 @@ The image below shows my overall high-level system architecture:
 
 **Project Structure**
 ```txt
-  ├── ansible                                            /* Creates GCE instances and downloads a custom Docker image for Jenkins */
-  ├── custom_image_jenkins                               /* Custom Jenkins image that includes the Helm tool */
-  ├── Data_indexing                                      /* The data processing and indexing pipeline to Weaviate */
-  │    ├── .pdf                                          /* Data to import */
-  │    └── notebook.ipynb                                /* Python notebook file of the indexing pipeline */
-  ├── embedding                                          /* Deploys the embedding model */
-  │    ├── helm_embedding                                /* Helm chart for deploying the embedding model */
-  │    ├── app.py                                        /* API for the embedding model */
-  │    └── Dockerfile                                    /* Dockerfile for the embedding model */
-  ├── context_retrieval                                  /* Deploys the context retrieval service */
-  │    ├── helm_context_retrieval                        /* Helm chart for deploying the context retrieval service */
-  │    ├── app.py                                        /* API for retrieving relevant context from Weaviate */
-  │    └── Dockerfile                                    /* Dockerfile for the context retrieval service */
-  ├── primary_agent                                      /* Deploys the primary agent responsible for orchestrating query resolution */
-  │    ├── helm_primary_agent                            /* Helm chart for deploying the primary agent */
-  │    ├── main.py                                       /* Main API logic for handling user queries and calling RAG services */
-  │    └── Dockerfile                                    /* Dockerfile for the primary agent */
-  ├── rag_agent                                          /* Deploys the reasoning agent for refining queries and generating responses */
-  │    ├── helm_rag_agent                                /* Helm chart for deploying the RAG agent */
-  │    ├── app.py                                        /* API for reasoning over retrieved documents and generating responses */
-  │    └── Dockerfile                                    /* Dockerfile for the RAG agent */
-  ├── image                                              /* Contains images displayed in `README.md` */
-  ├── jaeger-all-in-one                                  /* Helm chart for deploying Jaeger */
-  ├── loki                                               /* Helm chart for deploying Loki */
-  ├── nginx-ingress                                      /* Helm chart for deploying Nginx Ingress */
-  ├── prometheus                                         /* Contains monitoring tools deployment configurations */
-  │    ├── kube-prometheus-stack                         /* Helm chart for deploying Prometheus, Alertmanager, and Grafana */
-  │    └── values-prometheus.yaml                        /* Custom values for the `kube-prometheus-stack` chart */
-  ├── terraform                                          /* Terraform scripts for creating the GKE cluster */
-  ├── weaviate                                           /* Helm chart for deploying the Weaviate vector database */
-  ├── local_test                                         /* Building and testing the pipeline locally */
-  └── Jenkinsfile                                        /* Defines the CI/CD pipeline for continuous deployment of `rag_controller1` */
+data-preparation/                                  /* Data preparation scripts */
+├── data-indexing/                                 /* Data indexing pipeline */
+│    └── notebook.ipynb
+└── vectorizer/                                    /* Embedding module */
+     ├── main.py
+     ├── Dockerfile
+     └── requirements.txt
 
+agents/                                            /* Deployment of agents */
+├── primary-agent/                                 /* Primary agent for orchestrating query resolution */
+│    ├── main.py
+│    ├── Dockerfile
+│    ├── requirements.txt
+│    └── docker-compose.yaml                       /* Docker Compose configuration for primary agent */
+└── reasoning-agent/                               /* Reasoning agent for refining queries and generating responses */
+     ├── main.py
+     ├── Dockerfile
+     ├── requirements.txt
+     └── docker-compose.yaml                       /* Docker Compose configuration for reasoning agent */
+
+context-retrieval/                                 /* Service for retrieving relevant context from Weaviate */
+├── main.py
+├── Dockerfile
+└── requirements.txt
+
+infra/                                             /* Infrastructure provisioning scripts */
+├── ansible/                                       /* Ansible playbooks and configurations */
+└── terraform/                                     /* Terraform scripts for cloud resources */
+
+monitoring/                                        /* Monitoring and observability tools */
+├── loki/                                          /* Loki for logging */
+├── jaeger-all-in-one                              /* Jaeger for distributed tracing */
+└── prometheus/                                    /* Prometheus (and Grafana) for monitoring */
+
+deployments/                                       /* Deployment Helm charts */
+├── weaviate/                                      /* Weaviate vector database deployment */
+├── nginx-ingress/                                 /* Nginx Ingress Controller deployment */
+└── your-application-helm-chart/                   /* Helm chart for deploying your application */
 
 ```
 
@@ -144,7 +149,7 @@ gcloud config set project <your_project_id>
 
 Update <your_project_id> in terraform/variables.tf  and run the following commands to create GKE cluster:
 ```bash
-cd terraform
+cd infra/terraform
 terraform init
 terraform plan
 terraform apply
@@ -169,6 +174,8 @@ Use the [Helm chart](https://helm.sh/docs/topics/charts/) to deploy application 
 #### 1. Deploy NGINX ingress controller
 Deploying NGINX on Kubernetes is a widely used approach for managing and directing traffic within a cluster, especially for external requests. Rather than assigning multiple external IPs to individual services, an NGINX ingress controller streamlines traffic routing, reduces costs, and simplifies your architecture. To deploy NGINX on Kubernetes, run the following bash command:
 ```bash
+cd deployment
+
 helm upgrade --install nginx-ingress ./nginx-ingress --namespace nginx-system --create-namespace
 ```
 After executing this command, the NGINX ingress controller will be created in the nginx-system namespace. Then, copy the external-ip of its service to use in the following steps.
@@ -177,13 +184,17 @@ After executing this command, the NGINX ingress controller will be created in th
 #### 2. Deploy the Embedding Model
 Since my dataset is based on Vietnamese law, I utilize an embedding model specifically trained on Vietnamese vocabulary. To deploy this model on Kubernetes, run the following bash command:
 ```bash
-helm upgrade --install text-vectorizer ./embedding/helm_embedding --namespace emb --create-namespace
+cd deployment
+
+helm upgrade --install text-vectorizer ./application-helm-chart/helm-embedding --namespace emb --create-namespace
 ```
 After executing this command, a pod for the embedding model will be created in the `emb` namespace.
 
 #### 3. Deploy the Vector Database
 To deploy the vector database, run the following bash command:
 ```bash
+cd deployment
+
 helm upgrade --install   "weaviate"   ./weaviate   --namespace "weaviate"   --values ./weaviate/values.yaml --create-namespace
 ```
 After this command, a pod for the vector database will be created in the `weaviate` namespace.
@@ -192,7 +203,7 @@ After this command, a pod for the vector database will be created in the `weavia
 Now to index data - the PDF file to Weaviate, we follow these steps:
 - Create the environment for indexing data to Weaviate:
   ```bash
-  cd Data_indexing
+  cd data-preparation/data-indexing
 
   conda create -n Data_Indexing_Pipeline python=3.9
 
@@ -214,14 +225,18 @@ Now to index data - the PDF file to Weaviate, we follow these steps:
 #### 4. Deploy the Context Retrieval component
 To deploy the context retrieval component used in RAG, run the following bash command:
 ```bash
-helm upgrade --install retrieval ./context_retrieval/helm_context_retrieval --namespace context-retrieval --create-namespace
+cd deployment
+
+helm upgrade --install retrieval ./application-helm-chart/helm-context-retrieval --namespace context-retrieval --create-namespace
 ```
 Now, a pod for the context retrieval service will be created in the `context-retrieval` namespace.
 
 #### 5. Deploy the RAG agent
 The following command is used to deploy the RAG reasoning agent:
 ```bash
-helm upgrade --install rag-agent ./RAG_with_reasoning_agent/helm_RAG_agent/ --namespace rag-agent --create-namespace
+cd deployment
+
+helm upgrade --install rag-agent ./application-helm-chart/helm-rag-agent/ --namespace rag-agent --create-namespace
 ```
 RAG agent is now running in the `rag-agent` namespace.
 
@@ -229,14 +244,16 @@ RAG agent is now running in the `rag-agent` namespace.
 Primary agent service endpoint will be exposed to the Internet via NGINX service. Before running the Helm install command, we will edit the host of the ingress in `./Primary_agent/helm_primary_agent/values.yaml`, to use the `external-ip` of the NGINX service mentioned above and append `sslip.io` to expose the IP publicly. For example:
 ```helm
 ingress: 
-  host: 34.101.178.65.sslip.io
+  host: 34.101.178.65.nip.io
 ```
 
 Then, run the following bash command to deploy it on Kubernetes:
 ```bash
-helm upgrade --install primary-agent ./Primary_agent/helm_primary_agent/ --namespace primary-agent --create-namespace
+cd deployment
+
+helm upgrade --install primary-agent ./application-helm-chart/helm-primary-agent/ --namespace primary-agent --create-namespace--create-namespace
 ```
-Now you can access Primary agent at address: http://34.101.178.65.sslip.io/docs
+Now you can access Primary agent at address: http://34.101.178.65.nip.io/docs
 ![](images/6_primary_agent_ui.png)
 
 #### 7. Play around with the Application
@@ -254,34 +271,35 @@ Another example:
 
 ## V. Deploy observable services
 #### 1. Tracing with Jaeger & Opentelemetry
-Before deployment, edit the `ingress.host` variable to match your Jaeger domain, like so:  `ingress.host=<your_domain_jaeger>`. In my case, it is `ingress.host=jaeger.bmk.com`
-
-Then, run the following command to deploy Jaeger on Kubernetes:
+Run the following command to deploy Jaeger on Kubernetes:
 ```bash
+cd monitoring
+
 helm upgrade --install jaeger-tracing ./jaeger-all-in-one --namespace jaeger-tracing --create-namespace
 ```
 
-Next, add Jaeger's domain name to NGINX's external IP:
+Now to access Jaeger, we will port forward:
 ```bash
-sudo vim /etc/hosts
-
-<your_external_svc_nginx> <your_domain_jaeger>
+kubectl port-forward svc/jaeger-tracing 16686:16686
 ```
-For example, in my case:
-```bash
-sudo vim /ect/hosts
+Access Jaeger via `http://localhost:16686`:
+![](images/10_1_jaeger_UI.png)
 
-34.128.73.202 jaeger.bmk.com
-```
-Now you can access Jaeger UI at `http://<your_domain_jaeger>/search`
 
-![](images/10_jaeger.png)
+Now we can trace how our components interact with each other for debugging purpose:
+![](images/10_2_trace_primary_agent.png)
+
+
+
+
 
 
 #### 2. Monitoring with Prometheus and Grafana
 Prometheus scrapes metrics from Kubernetes.
 Run the following command to deploy Prometheus on Kubernetes:
 ```bash
+cd monitoring
+
 helm upgrade --install prometheus-grafana-stack -f ./prometheus/values-prometheus.yaml ./prometheus/kube-prometheus-stack --namespace monitoring --create-namespace
 ```
 

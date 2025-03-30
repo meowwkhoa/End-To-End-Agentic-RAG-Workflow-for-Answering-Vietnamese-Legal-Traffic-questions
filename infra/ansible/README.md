@@ -1,29 +1,103 @@
-add file key .json: service account -> create service acount -> add key
-go to IAM and adding grant access with service_acount above, role: Compute Admin
-conda create -n ansible python==3.9 -y
-pip install -r requirements.txt
+# Project Setup Guide
 
-Create GCE with Ansible
-gcloud auth application-default login
-gcloud config set project jenkins1-433523
-enable Compute Engine API
+## Table of Contents
+- [Service Account Setup](#service-account-setup)
+- [IAM Configuration](#iam-configuration)
+- [Environment Setup](#environment-setup)
+- [GCE Instance Creation](#gce-instance-creation)
+- [SSH Configuration](#ssh-configuration)
+- [Jenkins Deployment](#jenkins-deployment)
+- [Kubernetes Configuration](#kubernetes-configuration)
 
-ansible-playbook playbooks/create_compute_instance.yaml
-update ssh key in inventory
+---
 
-cat ~/.ssh/id_rsa.pub
-update ssh keys in metadata of compute engine
+## Service Account Setup
+Create a Service Account and generate a key:
+- Add a file key in JSON format:
+     - **Path:** `service account -> create service account -> add key`
 
-ansible-playbook -i inventory playbooks/deploy_jenkins.yaml
+---
 
-Collect certificate K8s: kubectl config view --raw
+## IAM Configuration
+Grant Compute Admin role to the service account:
+1. Navigate to **IAM & Admin > IAM**
+2. Add the service account to IAM
+3. Assign role: **Compute Admin**
 
-kubectl create clusterrolebinding rag-controller-admin-binding \
-  --clusterrole=admin \
-  --serviceaccount=rag-controller:default \
-  --namespace=rag-controller
+---
 
-kubectl create clusterrolebinding anonymous-admin-binding \
-  --clusterrole=admin \
-  --user=system:anonymous \
-  --namespace=rag-controller
+## Environment Setup
+1. Create Conda environment:
+    ```bash
+      conda create -n ansible python==3.9 -y
+      conda activate ansible
+    ```
+
+2. Install dependencies:
+    ```bash
+      pip install -r requirements.txt
+    ```
+
+---
+
+## GCE Instance Creation
+1. Authenticate and set project:
+    ```bash
+      gcloud auth application-default login
+      gcloud config set project jenkins1-433523
+    ```
+
+2. Enable Compute Engine API
+
+3. Create instance via Ansible:
+    ```bash
+      ansible-playbook playbooks/create_compute_instance.yaml
+    ```
+
+---
+
+## SSH Configuration
+1. Update SSH keys in inventory:
+    ```bash
+      cat ~/.ssh/id_rsa.pub
+    ```
+2. Add the SSH public key to:
+  GCP Console > Compute Engine > Metadata > SSH Keys
+
+---
+## Jenkins deployment
+Run the Jenkins deployment playbook:
+  ```bash
+      ansible-playbook -i inventory playbooks/deploy_jenkins.yaml
+  ```
+
+--- 
+## Kubernetes Configuration
+1. Export Kubernetes certificate:
+    ```bash
+      kubectl config view --raw > ~/.kube/config
+    ```
+
+2. Create cluster role bindings:
+    ```bash
+      kubectl create clusterrolebinding rag-controller-admin-binding \
+      --clusterrole=admin \
+      --serviceaccount=rag-controller:default \
+      --namespace=rag-controller
+
+      kubectl create clusterrolebinding anonymous-admin-binding \
+        --clusterrole=admin \
+        --user=system:anonymous \
+        --namespace=rag-controller
+    ```
+
+---
+## Important notes
+- Replace `jenkins1-433523` with your actual GCP project ID
+- Ensure firewall rules allow necessary traffic (SSH/HTTP/HTTPS)
+
+
+
+
+
+   
