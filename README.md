@@ -1,4 +1,4 @@
-# **Deploying an Agentic RAG pipeline on K8s with Jenkins for answering Vietnamese Traffic Law questions** 
+# **Deploying an Agentic RAG workflow on K8s with Jenkins for answering Vietnamese Traffic Law questions** 
 - [**Sections**](#deploying-agentic-rag-on-k8s-with-jenkins-for-answering-Vietnamese-traffic-law-questions)
   - [I. Introduction](#i-introduction)
   - [II. The Agentic RAG workflow architecture](#ii-the-agentic-rag-workflow-architecture)
