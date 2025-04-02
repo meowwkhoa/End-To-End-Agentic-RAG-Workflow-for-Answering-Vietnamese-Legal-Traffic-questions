@@ -1,0 +1,30 @@
+namespace: rag-agent
+
+deployment:
+  name: rag-agent
+  replicaCount: 1
+  labels:
+    appName: rag-agent
+  container:
+    name: rag-agent
+    portNumber: 8006
+    args: []
+  image:
+    name: khoatomato/rag_agent
+    version: v0.0
+    imagePullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 200m
+      memory: 1.5Gi
+    limits:
+      cpu: 2
+      memory: 10Gi
+
+service:
+  name: rag-agent
+  type: ClusterIP 
+  httpPort:
+    enable: true
+    port: 65003
+    targetPort: 8006

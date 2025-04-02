@@ -1,0 +1,12 @@
+apiVersion: v1
+name: app
+description: helm chart for Jaeger
+
+type: application
+version: 0.0.1
+
+appVersion: "0.0.1"
+
+maintainers:
+  - email: mkhoa1807@gmail.com
+    name: mkhoa

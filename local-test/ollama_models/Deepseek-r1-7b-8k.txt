@@ -1,0 +1,2 @@
+FROM deepseek-r1:7b
+PARAMETER num_ctx 8096

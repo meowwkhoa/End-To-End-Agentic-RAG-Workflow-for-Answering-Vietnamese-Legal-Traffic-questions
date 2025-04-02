@@ -1,0 +1,4 @@
+image:
+  repository: jaegertracing/all-in-one
+  tag: 1.47
+  pullPolicy: Always
